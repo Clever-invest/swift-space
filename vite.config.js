@@ -1,9 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-const repositoryName = 'swift-space';
-
-export default defineConfig(({ command }) => ({
+export default defineConfig({
   plugins: [react()],
-  base: command === 'build' ? `/${repositoryName}/` : '/',
-}));
+  base: '/flip-calculator/'
+});
