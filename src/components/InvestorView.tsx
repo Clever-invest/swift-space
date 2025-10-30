@@ -21,7 +21,7 @@ export const InvestorView: React.FC<InvestorViewProps> = ({ investor, project, i
   
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-6 border-2 border-blue-200">
+      <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-6 border-2 border-blue-200">
         <h3 className="text-xl font-bold text-blue-900 mb-4">👤 Метрики инвестора</h3>
         <p className="text-sm text-blue-700 mb-6">
           Инвестор финансирует все затраты проекта и получает возврат капитала + свою долю прибыли. Swift Space получает свою долю прибыли без вложения капитала.

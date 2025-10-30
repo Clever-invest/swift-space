@@ -2,7 +2,9 @@
 // ГЛАВНОЕ ПРИЛОЖЕНИЕ V2 - КАЛЬКУЛЯТОР ФЛИППИНГА
 // =====================================
 
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import type { DealInput } from './calculations/types';
 import { computeProject, computeInvestor, validateInput, computeSensitivity, computeDerived } from './calculations/core';
 import { saveToStorage, loadFromStorage, decodeFromQuery } from './utils/share';
@@ -90,11 +92,23 @@ export default function App() {
   });
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Header */}
       <header className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-6">
-          <h1 className="text-3xl font-bold mb-2">Калькулятор флиппинга недвижимости v2</h1>
+          <div className="flex items-center gap-4 mb-3">
+            <Link 
+              to="/" 
+              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+              aria-label="Вернуться к выбору версии"
+            >
+              <ArrowLeft size={20} />
+              <span className="hidden sm:inline">Назад</span>
+            </Link>
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold">Калькулятор флиппинга недвижимости v2</h1>
+            </div>
+          </div>
           <p className="text-blue-100">Точный расчет ROI и IRR без XIRR • Модульная архитектура • TypeScript</p>
         </div>
       </header>

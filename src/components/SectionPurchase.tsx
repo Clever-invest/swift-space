@@ -14,7 +14,7 @@ interface SectionPurchaseProps {
 
 export const SectionPurchase: React.FC<SectionPurchaseProps> = ({ input, onChange, errors }) => {
   return (
-    <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 mb-4">
+    <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-6 shadow-sm border border-gray-200 mb-4">
       <h3 className="text-lg font-bold text-gray-800 mb-4">💰 Покупка</h3>
       
       <InputField

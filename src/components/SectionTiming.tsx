@@ -16,7 +16,7 @@ export const SectionTiming: React.FC<SectionTimingProps> = ({ input, onChange, e
   const monthsTotal = input.monthsRepair + input.monthsExposure;
   
   return (
-    <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 mb-4">
+    <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-6 shadow-sm border border-gray-200 mb-4">
       <h3 className="text-lg font-bold text-gray-800 mb-4">⏱️ Сроки</h3>
       
       <InputField

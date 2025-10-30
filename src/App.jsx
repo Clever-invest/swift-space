@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
 } from 'recharts';
 import {
   TrendingUp, DollarSign, Calendar, AlertCircle, Download, Clock,
-  Save, Trash2, MapPin, Home, Search
+  Save, Trash2, MapPin, Home, Search, ArrowLeft
 } from 'lucide-react';
 
 // ==== Fallback-хранилище на localStorage, если window.storage отсутствует ====
@@ -659,7 +660,19 @@ const FlipCalculator = () => {
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-4 sm:p-6 text-white">
-            <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">Калькулятор флиппинга недвижимости</h1>
+            <div className="flex items-center gap-3 mb-2">
+              <Link 
+                to="/" 
+                className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-sm"
+                aria-label="Вернуться к выбору версии"
+              >
+                <ArrowLeft size={18} />
+                <span className="hidden sm:inline">Назад</span>
+              </Link>
+              <div className="flex-1">
+                <h1 className="text-2xl sm:text-3xl font-bold">Калькулятор флиппинга недвижимости</h1>
+              </div>
+            </div>
             <p className="text-blue-100 text-sm sm:text-base">Интерактивный анализ сделки с мгновенным расчетом маржи и распределения долей</p>
           </div>
 
