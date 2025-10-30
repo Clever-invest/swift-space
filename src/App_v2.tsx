@@ -158,7 +158,7 @@ export default function App() {
             <ShareExport input={input} project={project} investor={investor} />
           </div>
         ) : (
-          <InvestorView investor={investor} input={input} monthsTotal={derived.monthsTotal} />
+          <InvestorView investor={investor} project={project} input={input} monthsTotal={derived.monthsTotal} />
         )}
       </main>
       

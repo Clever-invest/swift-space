@@ -3,19 +3,20 @@
 // =====================================
 
 import React from 'react';
-import type { DealOutputsInvestor, DealInput } from '../calculations/types';
+import type { DealOutputsInvestor, DealOutputsProject, DealInput } from '../calculations/types';
 import { fmtMoney, fmtPct } from '../calculations/money';
 
 interface InvestorViewProps {
   investor: DealOutputsInvestor;
+  project: DealOutputsProject;
   input: DealInput;
   monthsTotal: number;
 }
 
-export const InvestorView: React.FC<InvestorViewProps> = ({ investor, input, monthsTotal }) => {
+export const InvestorView: React.FC<InvestorViewProps> = ({ investor, project, input, monthsTotal }) => {
   // Общая прибыль проекта
-  const totalProfit = investor.cashBack - investor.capital;
-  // Доля Swift Space (оператора)
+  const totalProfit = project.profit;
+  // Доля Swift Space = общая прибыль - доля инвестора
   const swiftSpaceShare = totalProfit - investor.profitShare;
   
   return (
