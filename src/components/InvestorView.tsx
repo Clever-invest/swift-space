@@ -13,16 +13,17 @@ interface InvestorViewProps {
 }
 
 export const InvestorView: React.FC<InvestorViewProps> = ({ investor, input, monthsTotal }) => {
-  const operatorShare = investor.profitShare > 0 
-    ? (investor.cashBack - investor.capital) - investor.profitShare 
-    : 0;
+  // Общая прибыль проекта
+  const totalProfit = investor.cashBack - investor.capital;
+  // Доля Swift Space (оператора)
+  const swiftSpaceShare = totalProfit - investor.profitShare;
   
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-6 border-2 border-blue-200">
         <h3 className="text-xl font-bold text-blue-900 mb-4">👤 Метрики инвестора</h3>
         <p className="text-sm text-blue-700 mb-6">
-          Инвестор финансирует все затраты проекта и получает возврат капитала + свою долю прибыли.
+          Инвестор финансирует все затраты проекта и получает возврат капитала + свою долю прибыли. Swift Space получает свою долю прибыли без вложения капитала.
         </p>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -132,8 +133,8 @@ export const InvestorView: React.FC<InvestorViewProps> = ({ investor, input, mon
           
           <div className="p-4 bg-purple-50 border-2 border-purple-300 rounded-lg">
             <div className="flex items-center gap-2 mb-3">
-              <div className="text-2xl">⚙️</div>
-              <div className="font-bold text-purple-900">Оператор</div>
+              <div className="text-2xl">🚀</div>
+              <div className="font-bold text-purple-900">Swift Space</div>
             </div>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
@@ -141,12 +142,12 @@ export const InvestorView: React.FC<InvestorViewProps> = ({ investor, input, mon
                 <span className="font-semibold">—</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-purple-700">Доля прибыли:</span>
-                <span className="font-semibold">{fmtMoney(operatorShare)}</span>
+                <span className="text-purple-700">Доля прибыли ({fmtPct(input.operatorProfitSharePct)}):</span>
+                <span className={`font-semibold ${swiftSpaceShare >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtMoney(swiftSpaceShare)}</span>
               </div>
               <div className="flex justify-between border-t border-purple-200 pt-2">
                 <span className="text-purple-900 font-bold">Итого:</span>
-                <span className="font-bold">{fmtMoney(operatorShare)}</span>
+                <span className={`font-bold ${swiftSpaceShare >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtMoney(swiftSpaceShare)}</span>
               </div>
             </div>
           </div>
@@ -158,7 +159,7 @@ export const InvestorView: React.FC<InvestorViewProps> = ({ investor, input, mon
         <ul className="text-sm text-blue-800 space-y-1">
           <li>• Инвестор финансирует все затраты проекта на старте (t0)</li>
           <li>• При продаже инвестор получает возврат капитала + {fmtPct(input.investorProfitSharePct)} прибыли</li>
-          <li>• Оператор получает {fmtPct(input.operatorProfitSharePct)} прибыли без вложения капитала</li>
+          <li>• Swift Space получает {fmtPct(input.operatorProfitSharePct)} прибыли без вложения капитала</li>
           <li>• IRR рассчитывается по формуле: MOIC^(12/месяцы) − 1</li>
         </ul>
       </div>

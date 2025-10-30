@@ -43,7 +43,7 @@ export const SectionSplit: React.FC<SectionSplitProps> = ({ input, onChange, err
       />
       
       <InputField
-        label="Доля оператора"
+        label="Доля Swift Space"
         value={input.operatorProfitSharePct}
         onChange={handleOperatorChange}
         type="percent"
@@ -51,7 +51,7 @@ export const SectionSplit: React.FC<SectionSplitProps> = ({ input, onChange, err
         max={100}
         step={1}
         error={errors['operatorProfitSharePct']}
-        tooltip="Процент прибыли, получаемый оператором (автоматически = 100 - доля инвестора)"
+        tooltip="Процент прибыли, получаемый Swift Space (автоматически = 100 - доля инвестора)"
       />
       
       {isInvalidSplit && (
