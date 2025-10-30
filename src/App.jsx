@@ -245,7 +245,7 @@ const FlipCalculator = () => {
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; background: #f9fafb; color: #1f2937; }
-          .container { max-width: 1000px; margin: 0 авто; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+          .container { max-width: 1000px; margin: 0 auto; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
           .header { text-align: center; border-bottom: 3px solid #3b82f6; padding-bottom: 12px; margin-bottom: 20px; }
           h1 { color: #1e40af; font-size: 24px; margin-bottom: 8px; }
           .subtitle { color: #6b7280; font-size: 14px; }
@@ -1308,15 +1308,27 @@ const FlipCalculator = () => {
                               </div>
                             </div>
                             <div className="bg-white p-4 rounded-lg border border-purple-200">
-                              <div className="font-bold text-purple-900 mb-2">IRR (Internal Rate of Return):</div>
+                              <div className="font-bold text-purple-900 mb-2">IRR (Internal Rate of Return) — годовая доходность:</div>
                               <div className="font-mono space-y-1">
-                                <div className="text-gray-700">IRR = ((Выручка ÷ Затраты)^(12/месяцы) - 1) × 100%</div>
+                                <div className="text-gray-700">IRR = ((Чистая выручка ÷ Общие затраты)^(12/месяцы) - 1) × 100%</div>
                                 <div className="text-purple-700">
                                   IRR = (({formatCurrency(calculations.revenue.net)} ÷ {formatCurrency(calculations.costs.total)})^(12/{calculations.totalMonths}) - 1) × 100%
                                 </div>
                                 <div className="font-bold text-xl text-purple-900 mt-2">= {calculations.profit.irr.toFixed(2)}%</div>
                               </div>
                             </div>
+                          </div>
+                          <div className="mt-4 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                            <p className="text-sm text-indigo-900">
+                              <strong>💡 Разница между ROI и IRR:</strong>
+                            </p>
+                            <ul className="text-xs text-indigo-800 mt-2 space-y-1 ml-4 list-disc">
+                              <li><strong>ROI</strong> — общая доходность проекта, НЕ учитывает время</li>
+                              <li><strong>IRR</strong> — годовая ставка доходности, учитывает время (аннуализированная)</li>
+                              <li>При сроке 12 месяцев: ROI ≈ IRR</li>
+                              <li>При сроке &lt; 12 месяцев: IRR &gt; ROI (быстрый оборот выгоднее)</li>
+                              <li>При сроке &gt; 12 месяцев: IRR &lt; ROI (деньги работают дольше)</li>
+                            </ul>
                           </div>
                         </div>
 
@@ -1494,9 +1506,9 @@ const FlipCalculator = () => {
                               </div>
                             </div>
                             <div className="mt-3">
-                              <strong>IRR:</strong>
+                              <strong>IRR (годовая доходность):</strong>
                               <div className="mt-1 p-2 bg-white rounded border border-blue-100 font-mono text-[11px] sm:text-xs">
-                                IRR = ((Выручка / Затраты)^(12/месяцы) - 1) × 100%
+                                IRR = ((Чистая выручка / Общие затраты)^(12/месяцы) - 1) × 100%
                               </div>
                             </div>
                           </div>
