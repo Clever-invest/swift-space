@@ -27,6 +27,7 @@ const FlipCalculator = () => {
     propertyName: '',
     location: '',
     propertyType: '1BR',
+    dealType: 'secondary',  // 'secondary' или 'offplan'
     purchasePrice: 500000,
     sellingPrice: 700000,
     dldFees: 4,
@@ -42,6 +43,9 @@ const FlipCalculator = () => {
     targetReturn: 25,       // годовой таргет (для early sale)
     profitSplit: 50,        // доля инвестора, %
     marketGrowth: 0,
+    // Off-plan специфичные поля
+    paidAmount: 350000,     // фактически оплаченная сумма
+    paymentSchedule: [],    // план платежей
   });
 
   const [savedProperties, setSavedProperties] = useState([]);
@@ -173,12 +177,16 @@ const FlipCalculator = () => {
       propertyName: params.propertyName || 'Без названия',
       location: params.location || '',
       propertyType: params.propertyType,
+      dealType: params.dealType,
+      dealTypeLabel: params.dealType === 'offplan' ? '🏗️ Off-Plan' : '🏢 Вторичка',
       date: new Date().toLocaleString('ru-RU'),
       netProfit: formatCurrency(calculations.profit.net),
       roi: calculations.profit.roi.toFixed(1),
       irr: calculations.profit.irr.toFixed(1),
       totalMonths: calculations.totalMonths,
       purchasePrice: formatCurrency(params.purchasePrice),
+      paidAmount: params.dealType === 'offplan' ? formatCurrency(params.paidAmount) : null,
+      remainingDebt: params.dealType === 'offplan' && calculations.remainingDebt ? formatCurrency(calculations.remainingDebt) : null,
       sellingPrice: formatCurrency(params.sellingPrice),
       dldPercent: params.dldFees,
       dldAmount: formatCurrency(calculations.costs.dld),
@@ -282,6 +290,7 @@ const FlipCalculator = () => {
             <div class="subtitle" style="margin-top: 5px;">
               ${formatted.location ? '📍 ' + formatted.location : ''} 
               ${formatted.propertyType ? '• ' + formatted.propertyType : ''}
+              ${formatted.dealTypeLabel ? '• ' + formatted.dealTypeLabel : ''}
             </div>
             <div class="subtitle" style="margin-top: 5px; font-size: 12px;">
               Создано: ${formatted.date}
@@ -298,7 +307,9 @@ const FlipCalculator = () => {
           <div class="section">
             <h2>💰 Финансовые параметры</h2>
             <div class="info-grid">
-              <div class="info-item"><span class="info-label">Цена покупки</span><span class="info-value">${formatted.purchasePrice}</span></div>
+              <div class="info-item"><span class="info-label">${formatted.dealType === 'offplan' ? 'Общая стоимость от застройщика' : 'Цена покупки'}</span><span class="info-value">${formatted.purchasePrice}</span></div>
+              ${formatted.dealType === 'offplan' && formatted.paidAmount ? `<div class="info-item"><span class="info-label">Фактически оплачено</span><span class="info-value">${formatted.paidAmount}</span></div>` : ''}
+              ${formatted.dealType === 'offplan' && formatted.remainingDebt ? `<div class="info-item"><span class="info-label">Остаток долга (план платежей)</span><span class="info-value">${formatted.remainingDebt}</span></div>` : ''}
               <div class="info-item"><span class="info-label">Цена продажи</span><span class="info-value">${formatted.sellingPrice}</span></div>
               <div class="info-item"><span class="info-label">DLD/регистрация (${formatted.dldPercent}%)</span><span class="info-value">${formatted.dldAmount}</span></div>
               <div class="info-item"><span class="info-label">Комиссия покупателя (${formatted.buyerCommission}%)</span><span class="info-value">${formatted.buyerCommissionAmount}</span></div>
@@ -386,6 +397,7 @@ const FlipCalculator = () => {
       propertyName: property.propertyName,
       location: property.location,
       propertyType: property.propertyType,
+      dealType: property.dealType ?? 'secondary',
       purchasePrice: property.purchasePrice,
       sellingPrice: property.sellingPrice,
       dldFees: property.dldFees,
@@ -400,7 +412,9 @@ const FlipCalculator = () => {
       trusteeOfficeFee: property.trusteeOfficeFee ?? 5000,
       targetReturn: property.targetReturn,
       profitSplit: property.profitSplit,
-      marketGrowth: property.marketGrowth
+      marketGrowth: property.marketGrowth,
+      paidAmount: property.paidAmount ?? 0,
+      paymentSchedule: property.paymentSchedule ?? []
     });
 
     if (property.coordinates) {
@@ -423,10 +437,11 @@ const FlipCalculator = () => {
     const {
       purchasePrice, sellingPrice, dldFees, buyerCommission, sellerCommission,
       renovationBudget, contingency, renovationMonths, listingMonths,
-      serviceChargeYearly, dewaAcMonthly, trusteeOfficeFee, profitSplit
+      serviceChargeYearly, dewaAcMonthly, trusteeOfficeFee, profitSplit,
+      dealType, paidAmount, paymentSchedule
     } = params;
 
-    // Покупка
+    // Комиссии (рассчитываются от общей стоимости для обоих типов)
     const dldAmount = purchasePrice * (dldFees / 100);
     const buyerCommissionAmount = purchasePrice * (buyerCommission / 100);
     const buyerCommissionVAT = buyerCommissionAmount * 0.05;
@@ -440,46 +455,78 @@ const FlipCalculator = () => {
     const carryingService = serviceChargeMonthly * totalMonths;
     const carryingDewa = dewaAcMonthly * totalMonths;
 
-    // Trustee учитываем ТОЛЬКО на покупке
     const buyClosingFees = trusteeOfficeFee;
 
-    const totalCosts =
-      purchasePrice +
-      dldAmount +
-      buyerCommissionTotal +
-      totalRenovation +
-      carryingService +
-      carryingDewa +
-      buyClosingFees;
+    let totalCosts, revenueNet, remainingDebt = 0;
 
-    // Продажа
-    const sellerCommissionAmount = sellingPrice * (sellerCommission / 100);
-    const sellerCommissionVAT = sellerCommissionAmount * 0.05;
-    const sellerCommissionTotal = sellerCommissionAmount + sellerCommissionVAT;
-
-    // Чистая выручка без trustee на продаже
-    const revenueNet = sellingPrice - sellerCommissionTotal;
+    if (dealType === 'offplan') {
+      // OFF-PLAN: используем фактически оплаченную сумму
+      const actualPaid = paidAmount || 0;
+      
+      // Расчет даты продажи (от текущей даты + срок ремонта + срок экспозиции)
+      const saleDate = new Date();
+      saleDate.setMonth(saleDate.getMonth() + totalMonths);
+      
+      // Расчет остатка долга - учитываем только платежи, которые НАСТУПАЮТ к моменту продажи
+      remainingDebt = 0;
+      if (paymentSchedule && paymentSchedule.length > 0) {
+        remainingDebt = paymentSchedule
+          .filter(p => {
+            if (!p.date) return true; // Если дата не указана, считаем что платеж должен быть оплачен
+            const paymentDate = new Date(p.date);
+            if (isNaN(paymentDate.getTime())) return true; // Если дата невалидна, считаем что платеж должен быть оплачен
+            return paymentDate <= saleDate; // Учитываем только платежи до даты продажи
+          })
+          .reduce((sum, p) => sum + (p.amount || 0), 0);
+      }
+      
+      // Общие затраты = фактически оплаченное + комиссии + ремонт + носимые
+      totalCosts = actualPaid + dldAmount + buyerCommissionTotal + totalRenovation + carryingService + carryingDewa + buyClosingFees;
+      
+      // Продажа
+      const sellerCommissionAmount = sellingPrice * (sellerCommission / 100);
+      const sellerCommissionVAT = sellerCommissionAmount * 0.05;
+      const sellerCommissionTotal = sellerCommissionAmount + sellerCommissionVAT;
+      
+      // Чистая выручка = цена - комиссии - остаток долга
+      revenueNet = sellingPrice - sellerCommissionTotal - remainingDebt;
+    } else {
+      // SECONDARY: стандартная логика
+      totalCosts = purchasePrice + dldAmount + buyerCommissionTotal + totalRenovation + carryingService + carryingDewa + buyClosingFees;
+      
+      const sellerCommissionAmount = sellingPrice * (sellerCommission / 100);
+      const sellerCommissionVAT = sellerCommissionAmount * 0.05;
+      const sellerCommissionTotal = sellerCommissionAmount + sellerCommissionVAT;
+      
+      revenueNet = sellingPrice - sellerCommissionTotal;
+    }
 
     // Прибыль и метрики
     const netProfit = revenueNet - totalCosts;
     const roi = totalCosts > 0 ? (netProfit / totalCosts) * 100 : 0;
-    const irr =
-      totalMonths > 0 && totalCosts > 0 && revenueNet > 0
-        ? (Math.pow(revenueNet / totalCosts, 12 / totalMonths) - 1) * 100
-        : 0;
+    const irr = totalMonths > 0 && totalCosts > 0 && revenueNet > 0
+      ? (Math.pow(revenueNet / totalCosts, 12 / totalMonths) - 1) * 100
+      : 0;
 
-    // Распределение прибыли — только положительная часть
+    // Распределение прибыли
     const remainingProfit = Math.max(0, netProfit);
     const investorCapitalReturn = totalCosts;
     const investorProfitShare = remainingProfit * (profitSplit / 100);
     const operatorProfitShare = remainingProfit - investorProfitShare;
 
-    // Break-even: цена при revenueNet(price) = totalCosts
-    const breakEvenPrice = totalCosts / (1 - (sellerCommission / 100) * 1.05);
+    // Break-even
+    let breakEvenPrice;
+    if (dealType === 'offplan') {
+      // s * (1 - commission) - remainingDebt = totalCosts
+      // s = (totalCosts + remainingDebt) / (1 - commission)
+      breakEvenPrice = (totalCosts + remainingDebt) / (1 - (sellerCommission / 100) * 1.05);
+    } else {
+      breakEvenPrice = totalCosts / (1 - (sellerCommission / 100) * 1.05);
+    }
 
     return {
       costs: {
-        purchase: purchasePrice,
+        purchase: dealType === 'offplan' ? (paidAmount || 0) : purchasePrice,
         dld: dldAmount,
         buyerCommission: buyerCommissionAmount,
         buyerCommissionVAT: buyerCommissionVAT,
@@ -492,10 +539,11 @@ const FlipCalculator = () => {
       },
       revenue: {
         sellingPrice: sellingPrice,
-        sellerCommission: sellerCommissionAmount,
-        sellerCommissionVAT: sellerCommissionVAT,
-        sellerCommissionTotal: sellerCommissionTotal,
-        net: revenueNet
+        sellerCommission: sellingPrice * (sellerCommission / 100),
+        sellerCommissionVAT: (sellingPrice * (sellerCommission / 100)) * 0.05,
+        sellerCommissionTotal: (sellingPrice * (sellerCommission / 100)) * 1.05,
+        net: revenueNet,
+        remainingDebt: dealType === 'offplan' ? remainingDebt : undefined
       },
       profit: { net: netProfit, roi, irr },
       distribution: {
@@ -506,23 +554,36 @@ const FlipCalculator = () => {
         operatorTotal: operatorProfitShare
       },
       breakEven: breakEvenPrice,
-      totalMonths
+      totalMonths,
+      remainingDebt: dealType === 'offplan' ? remainingDebt : undefined
     };
   }, [params]);
-  const waterfallData = useMemo(() => ([
-    { name: 'Цена продажи', value: calculations.revenue.sellingPrice, fill: '#10b981' },
-    { name: 'Комиссия продавца', value: -calculations.revenue.sellerCommission, fill: '#ef4444' },
-    { name: 'VAT (5%)', value: -calculations.revenue.sellerCommissionVAT, fill: '#ef4444' },
-    { name: 'Покупка', value: -calculations.costs.purchase, fill: '#f59e0b' },
-    { name: 'DLD/рег.', value: -calculations.costs.dld, fill: '#f59e0b' },
-    { name: 'Комиссия покупателя', value: -calculations.costs.buyerCommission, fill: '#f59e0b' },
-    { name: 'VAT (5%)', value: -calculations.costs.buyerCommissionVAT, fill: '#f59e0b' },
-    { name: 'Ремонт', value: -calculations.costs.renovation, fill: '#f59e0b' },
-    { name: 'Service Charge', value: -calculations.costs.serviceCharge, fill: '#f59e0b' },
-    { name: 'DEWA AC', value: -calculations.costs.dewaAc, fill: '#f59e0b' },
-    { name: 'Trustee Office (покупка)', value: -calculations.costs.trusteeOfficeFee, fill: '#f59e0b' },
-    { name: 'Чистая прибыль', value: calculations.profit.net, fill: calculations.profit.net > 0 ? '#10b981' : '#ef4444' }
-  ]), [calculations]);
+  const waterfallData = useMemo(() => {
+    const data = [
+      { name: 'Цена продажи', value: calculations.revenue.sellingPrice, fill: '#10b981' },
+      { name: 'Комиссия продавца', value: -calculations.revenue.sellerCommission, fill: '#ef4444' },
+      { name: 'VAT (5%)', value: -calculations.revenue.sellerCommissionVAT, fill: '#ef4444' },
+    ];
+    
+    // Добавляем остаток долга для off-plan
+    if (params.dealType === 'offplan' && calculations.remainingDebt > 0) {
+      data.push({ name: '💳 Остаток долга', value: -calculations.remainingDebt, fill: '#9333ea' });
+    }
+    
+    data.push(
+      { name: params.dealType === 'offplan' ? 'Оплачено застройщику' : 'Покупка', value: -calculations.costs.purchase, fill: '#f59e0b' },
+      { name: 'DLD/рег.', value: -calculations.costs.dld, fill: '#f59e0b' },
+      { name: 'Комиссия покупателя', value: -calculations.costs.buyerCommission, fill: '#f59e0b' },
+      { name: 'VAT (5%)', value: -calculations.costs.buyerCommissionVAT, fill: '#f59e0b' },
+      { name: 'Ремонт', value: -calculations.costs.renovation, fill: '#f59e0b' },
+      { name: 'Service Charge', value: -calculations.costs.serviceCharge, fill: '#f59e0b' },
+      { name: 'DEWA AC', value: -calculations.costs.dewaAc, fill: '#f59e0b' },
+      { name: 'Trustee Office (покупка)', value: -calculations.costs.trusteeOfficeFee, fill: '#f59e0b' },
+      { name: 'Чистая прибыль', value: calculations.profit.net, fill: calculations.profit.net > 0 ? '#10b981' : '#ef4444' }
+    );
+    
+    return data;
+  }, [calculations, params.dealType]);
 
   const sensitivityData = useMemo(() => {
     const basePrice = params.sellingPrice;
@@ -645,7 +706,7 @@ const FlipCalculator = () => {
   };
 
   const handleParamChange = (key, value) => {
-    if (['propertyName', 'location', 'propertyType'].includes(key)) {
+    if (['propertyName', 'location', 'propertyType', 'dealType'].includes(key)) {
       setParams(prev => ({ ...prev, [key]: value }));
       return;
     }
@@ -796,6 +857,39 @@ const FlipCalculator = () => {
                       </select>
                     </div>
                   </div>
+
+                  <div>
+                    <label className="text-xs sm:text-sm font-medium text-gray-700 mb-2 block">Тип сделки</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setParams(prev => ({ ...prev, dealType: 'secondary' }))}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                          params.dealType === 'secondary'
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        🏢 Вторичка
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setParams(prev => ({ ...prev, dealType: 'offplan' }))}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                          params.dealType === 'offplan'
+                            ? 'bg-purple-600 text-white shadow-md'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        🏗️ Off-Plan
+                      </button>
+                    </div>
+                    {params.dealType === 'offplan' && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        💡 Офф-план: учитывается фактическая оплата и план платежей
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -805,7 +899,7 @@ const FlipCalculator = () => {
                 <div className="space-y-3 sm:space-y-4">
                   <div>
                     <label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">
-                      Цена покупки: {formatCurrency(params.purchasePrice)}
+                      {params.dealType === 'offplan' ? 'Общая стоимость от застройщика' : 'Цена покупки'}: {formatCurrency(params.purchasePrice)}
                     </label>
                     <input
                       type="range" min="100000" max="10000000" step="10000"
@@ -814,6 +908,117 @@ const FlipCalculator = () => {
                       className="w-full h-3"
                     />
                   </div>
+
+                  {params.dealType === 'offplan' && (
+                    <>
+                      <div>
+                        <label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">
+                          Фактически оплачено: {formatCurrency(params.paidAmount)}
+                        </label>
+                        <input
+                          type="range" min="0" max={params.purchasePrice} step="10000"
+                          value={params.paidAmount}
+                          onChange={(e) => handleParamChange('paidAmount', e.target.value)}
+                          className="w-full h-3"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>{params.purchasePrice > 0 ? ((params.paidAmount / params.purchasePrice) * 100).toFixed(0) : 0}% оплачено</span>
+                          <span>Остаток: {formatCurrency(Math.max(0, params.purchasePrice - params.paidAmount))}</span>
+                        </div>
+                      </div>
+
+                      <div className="border-t pt-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-xs sm:text-sm font-medium text-gray-700">
+                            📅 План платежей ({params.paymentSchedule.length})
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setParams(prev => ({
+                                ...prev,
+                                paymentSchedule: [...prev.paymentSchedule, { amount: 10000, date: '' }]
+                              }));
+                            }}
+                            className="px-2 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600 transition-colors"
+                          >
+                            + Добавить
+                          </button>
+                        </div>
+                        
+                        {params.paymentSchedule.length > 0 && (
+                          <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {params.paymentSchedule.map((payment, index) => (
+                              <div key={index} className="bg-gray-50 p-2 rounded-lg border border-gray-200">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-xs font-medium text-gray-600">#{index + 1}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setParams(prev => ({
+                                        ...prev,
+                                        paymentSchedule: prev.paymentSchedule.filter((_, i) => i !== index)
+                                      }));
+                                    }}
+                                    className="ml-auto text-red-500 hover:text-red-700 text-xs"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-xs text-gray-600 block mb-1">Сумма</label>
+                                    <input
+                                      type="number"
+                                      value={payment.amount}
+                                      onChange={(e) => {
+                                        const newSchedule = [...params.paymentSchedule];
+                                        newSchedule[index].amount = parseFloat(e.target.value) || 0;
+                                        setParams(prev => ({ ...prev, paymentSchedule: newSchedule }));
+                                      }}
+                                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                      placeholder="Сумма"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-gray-600 block mb-1">Дата</label>
+                                    <input
+                                      type="date"
+                                      value={payment.date}
+                                      onChange={(e) => {
+                                        const newSchedule = [...params.paymentSchedule];
+                                        newSchedule[index].date = e.target.value;
+                                        setParams(prev => ({ ...prev, paymentSchedule: newSchedule }));
+                                      }}
+                                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {params.paymentSchedule.length === 0 && (
+                          <p className="text-xs text-gray-500 text-center py-2">
+                            Нет платежей. Нажмите "+Добавить"
+                          </p>
+                        )}
+                        
+                        {params.paymentSchedule.length > 0 && (
+                          <div className="mt-2 p-2 bg-purple-50 rounded border border-purple-200">
+                            <div className="text-xs text-purple-800">
+                              <strong>Итого по плану:</strong> {
+                                formatCurrency(
+                                  params.paymentSchedule.reduce((sum, p) => sum + (p.amount || 0), 0)
+                                )
+                              }
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
 
                   <div>
                     <label className="text-xs sm:text-sm font-medium text-gray-700 mb-1 block">
@@ -1044,6 +1249,75 @@ const FlipCalculator = () => {
                 </div>
               </div>
 
+              {/* Off-plan специфичная информация */}
+              {params.dealType === 'offplan' && calculations.remainingDebt !== undefined && (
+                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 border-2 border-purple-200">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h3 className="text-sm sm:text-base font-bold text-purple-800 mb-2 flex items-center gap-2">
+                        💳 Остаток долга застройщику на момент продажи
+                      </h3>
+                      <p className="text-xs text-purple-600 mb-3">
+                        📅 Прогнозируемая дата продажи: <strong>{(() => {
+                          const date = new Date();
+                          date.setMonth(date.getMonth() + calculations.totalMonths);
+                          return date.toLocaleDateString('ru-RU');
+                        })()}</strong>
+                      </p>
+                      <p className="text-xs text-purple-600">
+                        Будет погашен из выручки при продаже
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl sm:text-3xl font-bold text-purple-700">
+                        {formatCurrency(calculations.remainingDebt)}
+                      </div>
+                      <div className="text-xs text-purple-600 mt-1">
+                        {params.paymentSchedule && params.paymentSchedule.length > 0 && (
+                          <span>из {formatCurrency(params.paymentSchedule.reduce((sum, p) => sum + (p.amount || 0), 0))} общего долга</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {params.paymentSchedule && params.paymentSchedule.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-purple-200">
+                      <p className="text-xs text-purple-700 font-medium mb-2">
+                        🗓️ Детализация платежей ({params.paymentSchedule.length}):
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {params.paymentSchedule.map((payment, idx) => {
+                          const paymentDate = payment.date ? new Date(payment.date) : null;
+                          const saleDate = new Date();
+                          saleDate.setMonth(saleDate.getMonth() + calculations.totalMonths);
+                          const isPaid = paymentDate && paymentDate <= saleDate;
+                          
+                          return (
+                            <div 
+                              key={idx} 
+                              className={`flex justify-between items-center text-xs p-2 rounded ${
+                                isPaid ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'
+                              }`}
+                            >
+                              <span className={isPaid ? 'text-red-700' : 'text-green-700'}>
+                                {isPaid ? '❌' : '✅'} #{idx + 1}: {payment.date || 'Дата не указана'}
+                              </span>
+                              <span className={`font-medium ${isPaid ? 'text-red-900' : 'text-green-900'}`}>
+                                {formatCurrency(payment.amount)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-3 p-2 bg-yellow-50 rounded border border-yellow-200">
+                        <p className="text-xs text-yellow-800">
+                          <strong>ℹ️ Примечание:</strong> ❌ = Должен быть погашен при продаже | ✅ = Останется за покупателем
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Доли */}
               <div className="grid md:grid-cols-2 gap-3 sm:gap-4">
                 <div className="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl p-4 text-white">
@@ -1185,10 +1459,23 @@ const FlipCalculator = () => {
                           </h4>
 
                           <div className="space-y-2 sm:space-y-3 font-mono">
-                            <div className="flex justify-between items-center bg-white p-3 rounded-lg">
-                              <span className="text-gray-700">Цена покупки</span>
-                              <span className="font-bold text-gray-900">{formatCurrency(params.purchasePrice)}</span>
-                            </div>
+                            {params.dealType === 'offplan' ? (
+                              <>
+                                <div className="flex justify-between items-center bg-purple-50 p-3 rounded-lg border border-purple-200">
+                                  <span className="text-purple-700 font-medium">🏗️ Общая стоимость от застройщика</span>
+                                  <span className="font-bold text-purple-900">{formatCurrency(params.purchasePrice)}</span>
+                                </div>
+                                <div className="flex justify-between items-center bg-white p-3 rounded-lg">
+                                  <span className="text-gray-700">Фактически оплачено ({params.purchasePrice > 0 ? ((params.paidAmount / params.purchasePrice) * 100).toFixed(0) : 0}%)</span>
+                                  <span className="font-bold text-gray-900">{formatCurrency(params.paidAmount)}</span>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex justify-between items-center bg-white p-3 rounded-lg">
+                                <span className="text-gray-700">Цена покупки</span>
+                                <span className="font-bold text-gray-900">{formatCurrency(params.purchasePrice)}</span>
+                              </div>
+                            )}
                             <div className="flex justify-between items-center bg-white p-3 rounded-lg">
                               <span className="text-gray-700">+ DLD/регистрация ({params.dldFees}%)</span>
                               <span className="font-bold text-orange-600">
@@ -1274,6 +1561,18 @@ const FlipCalculator = () => {
                                 <span className="text-[10px] text-gray-500 ml-2">({formatCurrency(calculations.revenue.sellerCommission)} × 5%)</span>
                               </span>
                             </div>
+                            
+                            {params.dealType === 'offplan' && calculations.remainingDebt > 0 && (
+                              <div className="flex justify-between items-center bg-purple-50 p-3 rounded-lg border border-purple-200">
+                                <span className="text-purple-700 font-medium">- 💳 Остаток долга застройщику (на дату продажи)</span>
+                                <span className="font-bold text-red-600">
+                                  - {formatCurrency(calculations.remainingDebt)}
+                                  <span className="text-[10px] text-purple-600 ml-2">
+                                    (Погашается из выручки)
+                                  </span>
+                                </span>
+                              </div>
+                            )}
 
                             <div className="border-t-4 border-blue-400 pt-3 mt-3">
                               <div className="flex justify-between items-center bg-blue-100 p-4 rounded-lg">

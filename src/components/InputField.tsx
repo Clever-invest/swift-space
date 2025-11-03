@@ -24,7 +24,7 @@ export const InputField: React.FC<InputFieldProps> = ({
   type,
   min,
   max,
-  step = 1,
+  step: _step = 1,
   error,
   disabled = false,
   tooltip,

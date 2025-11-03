@@ -11,6 +11,7 @@ const STORAGE_KEY = 'flip-calc:v1';
  */
 export function encodeToQuery(input: DealInput): string {
   const compressed = {
+    dt: input.dealType,
     pp: input.purchasePrice,
     sp: input.salePrice,
     dld: input.dldPct,
@@ -27,6 +28,8 @@ export function encodeToQuery(input: DealInput): string {
     me: input.monthsExposure,
     ip: input.investorProfitSharePct,
     op: input.operatorProfitSharePct,
+    pa: input.paidAmount,
+    ps: input.paymentSchedule,
   };
   
   const jsonStr = JSON.stringify(compressed);
@@ -42,6 +45,7 @@ export function decodeFromQuery(queryParam: string): DealInput | null {
     const compressed = JSON.parse(jsonStr);
     
     return {
+      dealType: compressed.dt || 'secondary',
       purchasePrice: compressed.pp || 0,
       salePrice: compressed.sp || 0,
       dldPct: compressed.dld || 4,
@@ -58,6 +62,8 @@ export function decodeFromQuery(queryParam: string): DealInput | null {
       monthsExposure: compressed.me || 4,
       investorProfitSharePct: compressed.ip || 50,
       operatorProfitSharePct: compressed.op || 50,
+      paidAmount: compressed.pa,
+      paymentSchedule: compressed.ps || [],
     };
   } catch (e) {
     console.error('Failed to decode query:', e);

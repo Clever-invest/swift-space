@@ -7,6 +7,7 @@ import { computeProject, computeInvestor, validateInput, computeSensitivity } fr
 import type { DealInput } from '../calculations/types';
 
 const testInput: DealInput = {
+  dealType: 'secondary',
   purchasePrice: 1390000,
   dldPct: 4,
   buyerFeePct: 2,

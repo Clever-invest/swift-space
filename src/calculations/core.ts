@@ -3,6 +3,7 @@
 // =====================================
 
 import type {
+  Money,
   DealInput,
   DealDerived,
   DealOutputsProject,
@@ -39,28 +40,79 @@ export function computeProject(input: DealInput): DealOutputsProject {
   // Стоимость ремонта с резервом
   const renovationTotal = input.renovationBudget * (1 + toRate(input.reservePct));
   
-  // Входящие комиссии на покупке
-  const dld = input.purchasePrice * toRate(input.dldPct);
-  const buyerFee = input.purchasePrice * toRate(input.buyerFeePct);
-  const buyerFeeVAT = buyerFee * toRate(input.buyerFeeVatPct);
+  let totalCosts: Money;
+  let netProceeds: Money;
+  let remainingDebt: Money | undefined;
   
-  // Общие затраты (все исходящие в t0)
-  const totalCosts = roundMoney(
-    input.purchasePrice +
-    dld +
-    buyerFee +
-    buyerFeeVAT +
-    renovationTotal +
-    carryingTotal +
-    input.trusteeFee
-  );
-  
-  // Комиссии на продаже
-  const sellerFee = input.salePrice * toRate(input.sellerFeePct);
-  const sellerFeeVAT = sellerFee * toRate(input.sellerFeeVatPct);
-  
-  // NET-выручка
-  const netProceeds = roundMoney(input.salePrice - sellerFee - sellerFeeVAT);
+  if (input.dealType === 'offplan') {
+    // OFF-PLAN: используем фактически оплаченную сумму
+    const paidAmount = input.paidAmount || 0;
+    
+    // Расчет даты продажи (от текущей даты + срок сделки)
+    const saleDate = new Date();
+    saleDate.setMonth(saleDate.getMonth() + monthsTotal);
+    
+    // Расчет остатка долга - учитываем только платежи, которые НАСТУПАЮТ к моменту продажи
+    remainingDebt = 0;
+    if (input.paymentSchedule && input.paymentSchedule.length > 0) {
+      remainingDebt = input.paymentSchedule
+        .filter(payment => {
+          if (!payment.date) return true; // Если дата не указана, считаем что платеж должен быть оплачен
+          const paymentDate = new Date(payment.date);
+          if (isNaN(paymentDate.getTime())) return true; // Если дата невалидна, считаем что платеж должен быть оплачен
+          return paymentDate <= saleDate; // Учитываем только платежи до даты продажи
+        })
+        .reduce((sum: number, payment) => sum + payment.amount, 0);
+    }
+    
+    // Входящие комиссии при покупке (рассчитываются от общей стоимости)
+    const dld = input.purchasePrice * toRate(input.dldPct);
+    const buyerFee = input.purchasePrice * toRate(input.buyerFeePct);
+    const buyerFeeVAT = buyerFee * toRate(input.buyerFeeVatPct);
+    
+    // Общие затраты = фактически оплаченная сумма + комиссии + ремонт + носимые расходы
+    totalCosts = roundMoney(
+      paidAmount +
+      dld +
+      buyerFee +
+      buyerFeeVAT +
+      renovationTotal +
+      carryingTotal +
+      input.trusteeFee
+    );
+    
+    // Комиссии на продаже
+    const sellerFee = input.salePrice * toRate(input.sellerFeePct);
+    const sellerFeeVAT = sellerFee * toRate(input.sellerFeeVatPct);
+    
+    // NET-выручка = цена продажи - комиссии продавца - остаток долга застройщику
+    netProceeds = roundMoney(input.salePrice - sellerFee - sellerFeeVAT - remainingDebt);
+    
+  } else {
+    // SECONDARY: стандартная логика
+    // Входящие комиссии на покупке
+    const dld = input.purchasePrice * toRate(input.dldPct);
+    const buyerFee = input.purchasePrice * toRate(input.buyerFeePct);
+    const buyerFeeVAT = buyerFee * toRate(input.buyerFeeVatPct);
+    
+    // Общие затраты (все исходящие в t0)
+    totalCosts = roundMoney(
+      input.purchasePrice +
+      dld +
+      buyerFee +
+      buyerFeeVAT +
+      renovationTotal +
+      carryingTotal +
+      input.trusteeFee
+    );
+    
+    // Комиссии на продаже
+    const sellerFee = input.salePrice * toRate(input.sellerFeePct);
+    const sellerFeeVAT = sellerFee * toRate(input.sellerFeeVatPct);
+    
+    // NET-выручка
+    netProceeds = roundMoney(input.salePrice - sellerFee - sellerFeeVAT);
+  }
   
   // Прибыль и метрики
   const profit = netProceeds - totalCosts;
@@ -77,12 +129,21 @@ export function computeProject(input: DealInput): DealOutputsProject {
   const aprSimple = monthsTotal > 0 ? roiPeriod * 12 / monthsTotal : 0;
   
   // Точка безубыточности
-  // netProceeds(s) = s * (1 - sellerFeePct*(1+sellerFeeVatPct))
-  // Нужно s при netProceeds(s) = totalCosts
   const sellerFeeRate = toRate(input.sellerFeePct) * (1 + toRate(input.sellerFeeVatPct));
-  const breakEvenSalePrice = totalCosts > 0 && sellerFeeRate < 1
-    ? roundMoney(totalCosts / (1 - sellerFeeRate))
-    : 0;
+  let breakEvenSalePrice: Money;
+  
+  if (input.dealType === 'offplan' && remainingDebt) {
+    // Для offplan: s * (1 - sellerFeeRate) - remainingDebt = totalCosts
+    // s = (totalCosts + remainingDebt) / (1 - sellerFeeRate)
+    breakEvenSalePrice = sellerFeeRate < 1
+      ? roundMoney((totalCosts + remainingDebt) / (1 - sellerFeeRate))
+      : 0;
+  } else {
+    // Для secondary: s * (1 - sellerFeeRate) = totalCosts
+    breakEvenSalePrice = totalCosts > 0 && sellerFeeRate < 1
+      ? roundMoney(totalCosts / (1 - sellerFeeRate))
+      : 0;
+  }
   
   const breakEvenGapAbs = input.salePrice - breakEvenSalePrice;
   const breakEvenGapPctOfPrice = input.salePrice > 0 
@@ -100,6 +161,7 @@ export function computeProject(input: DealInput): DealOutputsProject {
     breakEvenSalePrice,
     breakEvenGapAbs,
     breakEvenGapPctOfPrice,
+    remainingDebt,
   };
 }
 
@@ -298,6 +360,52 @@ export function validateInput(input: DealInput): ValidationResult {
       field: 'sellerFeePct',
       message: 'Комиссия продавца с VAT ≥100% - невозможная конфигурация',
     });
+  }
+  
+  // Проверка off-plan полей
+  if (input.dealType === 'offplan') {
+    if (input.paidAmount === undefined || input.paidAmount < 0) {
+      errors.push({
+        field: 'paidAmount',
+        message: 'Фактически оплаченная сумма обязательна для off-plan',
+      });
+    }
+    
+    if (input.paidAmount && input.paidAmount > input.purchasePrice) {
+      warnings.push({
+        field: 'paidAmount',
+        message: 'Фактически оплаченная сумма превышает общую стоимость',
+      });
+    }
+    
+    // Проверка плана платежей
+    if (input.paymentSchedule && input.paymentSchedule.length > 0) {
+      const totalScheduled = input.paymentSchedule.reduce((sum: number, p) => sum + p.amount, 0);
+      const paidAmount = input.paidAmount || 0;
+      
+      if (paidAmount + totalScheduled > input.purchasePrice * 1.01) { // 1% толерантность
+        warnings.push({
+          field: 'paymentSchedule',
+          message: `Сумма оплаченного (${paidAmount}) и плана платежей (${totalScheduled}) превышает общую стоимость (${input.purchasePrice})`,
+        });
+      }
+      
+      // Проверка каждого платежа
+      input.paymentSchedule.forEach((payment, idx) => {
+        if (payment.amount < 0) {
+          errors.push({
+            field: `paymentSchedule[${idx}]`,
+            message: `Платеж #${idx + 1}: сумма не может быть отрицательной`,
+          });
+        }
+        if (!payment.date || payment.date.trim() === '') {
+          errors.push({
+            field: `paymentSchedule[${idx}]`,
+            message: `Платеж #${idx + 1}: дата обязательна`,
+          });
+        }
+      });
+    }
   }
   
   // Проверка убыточности
